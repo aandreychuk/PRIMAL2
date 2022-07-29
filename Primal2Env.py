@@ -19,17 +19,20 @@ class PRIMAL2Env(MAPFEnv):
     metadata = {"render.modes": ["human", "ansi"]}
 
     def __init__(self, observer, map_generator, num_agents=None,
-                 IsDiagonal=False, frozen_steps=0, isOneShot=False):
+                 IsDiagonal=False, frozen_steps=0, isOneShot=False,
+                 start_poses=None, goal_poses=None):
         super(PRIMAL2Env, self).__init__(observer=observer, map_generator=map_generator,
-                                          num_agents=num_agents,
-                                          IsDiagonal=IsDiagonal, isOneShot=isOneShot)
+                                         num_agents=num_agents,
+                                         IsDiagonal=IsDiagonal, isOneShot=isOneShot,
+                                         start_poses=start_poses, goal_poses=goal_poses)
 
     def _reset(self, new_generator=None, *args):
         if new_generator is None:
             self.set_world()
         else:
             self.map_generator = new_generator
-            self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal)
+            self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal,
+                               agents_init_pos=args[0], goals_init_pos=args[1])
             self.num_agents = self.world.num_agents
             self.observer.set_env(self.world)
 
@@ -82,9 +85,9 @@ class PRIMAL2Env(MAPFEnv):
                     return pos
             return None
 
-        VANILLA_VALID_ACTIONS = False   
+        VANILLA_VALID_ACTIONS = False
 
-        if VANILLA_VALID_ACTIONS== True :
+        if VANILLA_VALID_ACTIONS == True:
             available_actions = []
             pos = self.world.getPos(agent_ID)
             available_actions.append(0)  # standing still always allowed 
@@ -217,14 +220,14 @@ if __name__ == '__main__':
               [-1, 0, -1, 0, 0, 0, -1],
               [-1, 2, -1, 0, 0, 0, -1],
               [-1, -1, -1, -1, -1, -1, -1]]
-    n_agents = 20 
+    n_agents = 20
     env = PRIMAL2Env(num_agents=n_agents,
-                      observer=PRIMAL2Observer(observation_size=5),
-                      map_generator=maze_generator(env_size=(6, 7),
-                                                   wall_components=(5, 10), obstacle_density=(0.3, 0.7)),
-                      # map_generator=manual_generator(state_map=state0, goals_map=None),
-                      IsDiagonal=False,isOneShot=True )
-    #for i in range(4):
+                     observer=PRIMAL2Observer(observation_size=5),
+                     map_generator=maze_generator(env_size=(6, 7),
+                                                  wall_components=(5, 10), obstacle_density=(0.3, 0.7)),
+                     # map_generator=manual_generator(state_map=state0, goals_map=None),
+                     IsDiagonal=False, isOneShot=True)
+    # for i in range(4):
     #    env.step_all({1: 1, 2: 1, 3: 1})
     #    print(env._render())
 
@@ -234,18 +237,18 @@ if __name__ == '__main__':
     print(env.world.state)
     print(env.world.goals_map)
     for j in range(0, 50):
-         movement = {1: a, 2: b, 3: c, 4: c, 5: c, 6: c, 7: c, 8: c}
-         env.step_all(movement)
-         obs = env._observe()
-         # env._render()
-         # print(env.renderer.GIF_frames)
-         # env.write_GIF('./','test')
-         # print(env.world.agents[1].position_history)
-         print(env.world.state)
-         a = int(input())
-         b = int(input())
-         c = int(input())
-         if c!=0 :
-            print(obs[18]) 
-    #     print(env.world.getGoal(1))
+        movement = {1: a, 2: b, 3: c, 4: c, 5: c, 6: c, 7: c, 8: c}
+        env.step_all(movement)
+        obs = env._observe()
+        # env._render()
+        # print(env.renderer.GIF_frames)
+        # env.write_GIF('./','test')
+        # print(env.world.agents[1].position_history)
+        print(env.world.state)
+        a = int(input())
+        b = int(input())
+        c = int(input())
+        if c != 0:
+            print(obs[18])
+            #     print(env.world.getGoal(1))
     #     # print(env.world.getAstarCosts(tuple(env.world.getPos(1)), tuple(env.world.getGoal(1))))

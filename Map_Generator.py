@@ -159,9 +159,25 @@ def maze_generator(env_size=(10, 70), wall_components=(1, 8), obstacle_density=N
     return generator
 
 
-def manual_generator(state_map, goals_map=None):
-    state_map = np.array(state_map)
-
+def manual_generator(str_map, goals_map=None):
+    row = [-1 for _ in range(len(str_map.split()[0])+10)]
+    obstacles = [row, row, row, row, row]
+    for idx, line in enumerate(str_map.split()):
+        row = [-1 for _ in range(5)]
+        for char in line:
+            if char == '.':
+                row.append(0)
+            elif char == '#':
+                row.append(-1)
+            else:
+                raise KeyError(f"Unsupported symbol '{char}' at line {idx}")
+        if row:
+            for k in range(5):
+                row.append(-1)
+            obstacles.append(row)
+    for k in range(5):
+        obstacles.append([-1 for _ in range(len(str_map.split()[0])+10)])
+    state_map = np.array(obstacles)
     assert state_map is not None
     assert len(state_map.shape) == 2
     assert min(state_map.shape) >= 5

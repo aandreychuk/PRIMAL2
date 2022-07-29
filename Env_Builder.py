@@ -222,7 +222,7 @@ class World:
     Do not add action pruning, reward structure or any other routine for training in this class. Pls add in upper class MAPFEnv
     """
 
-    def __init__(self, map_generator, num_agents, isDiagonal=False):
+    def __init__(self, map_generator, num_agents, isDiagonal=False, agents_init_pos=None, goals_init_pos=None):
         self.num_agents = num_agents
         self.manual_world = False
         self.manual_goal = False
@@ -231,7 +231,8 @@ class World:
         self.map_generator = map_generator
         self.isDiagonal = isDiagonal
 
-        self.agents_init_pos, self.goals_init_pos = None, None
+        self.agents_init_pos = agents_init_pos
+        self.goals_init_pos = goals_init_pos
         self.reset_world()
         self.init_agents_and_goals()
 
@@ -250,7 +251,13 @@ class World:
             return agents
 
         self.state, self.goals_map = self.map_generator()
+        self.manual_world = True
+        self.manual_goal = True
+        self.num_agents = len(self.agents_init_pos.keys())
+        self.agents = {i: copy.deepcopy(Agent()) for i in range(1, self.num_agents + 1)}
+        self.goals_map = np.zeros([self.state.shape[0], self.state.shape[1]])
         # detect manual world
+        '''
         if (self.state > 0).any():
             self.manual_world = True
             self.agents_init_pos = scan_for_agents(self.state)
@@ -269,7 +276,7 @@ class World:
 
         else:
             self.goals_map = np.zeros([self.state.shape[0], self.state.shape[1]])
-
+        '''
         self.corridor_map = {}
         self.restrict_init_corridor = True
         self.visited = []
@@ -342,10 +349,13 @@ class World:
             for position in positions:
                 if position is not None and self.corridor_map[position][0] == t:
                     break
-            index = self.corridors[t]['Positions'].index(position)
-
+            try:
+                index = self.corridors[t]['Positions'].index(position)
+            except:
+                index = 0
+            self.corridors[t]['StoppingPoints'] = [None, None]
             if index == 0:
-                pass
+                continue
             if index != len(self.corridors[t]['Positions']) - 1:
                 temp_list = self.corridors[t]['Positions'][0:index + 1]
                 temp_list.reverse()
@@ -360,7 +370,10 @@ class World:
                 for position2 in positions2:
                     if position2 is not None and self.corridor_map[position2][0] == t:
                         break
-                index2 = self.corridors[t]['Positions'].index(position2)
+                try:
+                    index2 = self.corridors[t]['Positions'].index(position2)
+                except:
+                    index2 = 0
                 temp_list = self.corridors[t]['Positions'][0:index2 + 1]
                 temp_list.reverse()
                 temp_end = self.corridors[t]['Positions'][index2 + 1:]
@@ -555,6 +568,7 @@ class World:
         :param id_list: a list of agentID
         :return: an Agent object
         """
+        print(id_list, manual_pos, 'put goals')
 
         def random_goal_pos(previous_goals=None, distance=None):
             if previous_goals is None:
@@ -633,11 +647,11 @@ class World:
                     print(self.goals_map)
                     raise ValueError('invalid manual_pos for goal' + str(agentID) + ' at: ', str(new_goals[agentID]))
                 if previous_goals[agentID] is not None:  # it has a goal!
-                    if previous_goals[agentID] != self.agents[agentID].position:
-                        print(self.state)
-                        print(self.goals_map)
-                        print(previous_goals)
-                        raise RuntimeError("agent hasn't finished its goal but asking for a new goal!")
+                    # if previous_goals[agentID] != self.agents[agentID].position:
+                    #    print(self.state)
+                    #    print(self.goals_map)
+                    #    print(previous_goals)
+                    #    raise RuntimeError("agent hasn't finished its goal but asking for a new goal!")
 
                     refresh_distance_map = True
 
@@ -746,18 +760,22 @@ class World:
 
         return status_dict, newPos_dict
 
+
 class MAPFEnv(gym.Env):
     metadata = {"render.modes": ["human", "ansi"]}
 
     def __init__(self, observer, map_generator, num_agents,
-                 IsDiagonal=False,isOneShot=False):
+                 IsDiagonal=False, isOneShot=False,
+                 start_poses=None, goal_poses=None):
         self.observer = observer
         self.map_generator = map_generator
         self.viewer = None
-
+        self.world = None
         self.isOneShot = isOneShot
         self.num_agents = num_agents
         self.IsDiagonal = IsDiagonal
+        self.start_poses = start_poses
+        self.goal_poses = goal_poses
         self.set_world()
         self.obs_size = self.observer.observation_size
         self.isStandingOnGoal = {i: False for i in range(1, self.num_agents + 1)}
@@ -788,8 +806,9 @@ class MAPFEnv(gym.Env):
         return {i: self.world.agents[i].position_history(-1) for i in range(1, self.num_agents + 1)}
 
     def set_world(self):
-
-        self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal)
+        self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal,
+                           agents_init_pos=self.start_poses,
+                           goals_init_pos=self.goal_poses)
         self.num_agents = self.world.num_agents
         self.observer.set_env(self.world)
 
@@ -833,7 +852,7 @@ class MAPFEnv(gym.Env):
         for agentID in range(1, self.num_agents + 1):
             if self.world.getDone(agentID) > 0 and self.isOneShot:
                 movement_dict.update({agentID: 0})
-            if agentID not in movement_dict.keys() :
+            if agentID not in movement_dict.keys():
                 movement_dict.update({agentID: 0})
             else:
                 assert movement_dict[agentID] in list(range(5)) if self.IsDiagonal else list(range(9)), \
@@ -1032,10 +1051,10 @@ if __name__ == "__main__":
     for _ in tqdm(range(2000)):
         n_agents = np.random.randint(low=25, high=30)
         env = PRIMAL2Env(num_agents=n_agents,
-                          observer=PRIMAL2Observer(observation_size=3),
-                          map_generator=maze_generator(env_size=(10, 30),
-                                                       wall_components=(3, 8), obstacle_density=(0.5, 0.7)),
-                          IsDiagonal=False)
+                         observer=PRIMAL2Observer(observation_size=3),
+                         map_generator=maze_generator(env_size=(10, 30),
+                                                      wall_components=(3, 8), obstacle_density=(0.5, 0.7)),
+                         IsDiagonal=False)
         for agentID in range(1, n_agents + 1):
             pos = env.world.agents[agentID].position
             goal = env.world.agents[agentID].goal_pos

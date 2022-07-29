@@ -233,7 +233,7 @@ class PRIMAL2Observer(ObservationBuilder):
                 for direction in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
                     # print(position, direction)
                     new_pos = tuple_plus(position, direction)
-                    if 0 < new_pos[0] <= h and 0 < new_pos[1] <= w:
+                    if 0 <= new_pos[0] < h and 0 <= new_pos[1] < w:
                         if distance_map[new_pos] == distance_map[position] - 1 \
                                 and distance_map[new_pos] >= 0:
                             next_astar_cell.append(new_pos)
@@ -269,7 +269,7 @@ class PRIMAL2Observer(ObservationBuilder):
                                             self.world.agents[agentID].goal_pos
                 astar_path.extend(
                     get_single_astar_path(distance_map1, start_pos1, self.num_future_steps - len(astar_path)))
-
+            print(astar_path)
             for i in range(self.num_future_steps - len(astar_path)):  # only happen when min_distance not sufficient
                 astar_path.extend([[astar_path[-1][-1]]])  # stay at the last pos
 
