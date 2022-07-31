@@ -239,8 +239,6 @@ class Worker:
             for i in instances:
                 print(i)
                 total_runs += 1
-                if total_runs > 10:
-                    break
                 instance_id = i
                 sess.run(self.pull_global)
                 episode_buffer, episode_values = [], []
