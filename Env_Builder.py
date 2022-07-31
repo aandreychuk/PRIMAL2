@@ -8,7 +8,7 @@ from od_mstar3.col_set_addition import OutOfTimeError, NoSolutionError
 from od_mstar3 import od_mstar
 from GroupLock import Lock
 from matplotlib.colors import *
-from gym.envs.classic_control import rendering
+#from gym.envs.classic_control import rendering
 import imageio
 from gym import spaces
 
@@ -925,8 +925,8 @@ class MAPFEnv(gym.Env):
             self.viewer.add_onetime(entry)
 
     def _render(self, mode='human', close=False, screen_width=800, screen_height=800):
-
-        def painter(state_map, agents_dict, goals_dict):
+        pass
+        '''def painter(state_map, agents_dict, goals_dict):
             def initColors(num_agents):
                 c = {a + 1: hsv_to_rgb(np.array([a / float(num_agents), 1, 1])) for a in range(num_agents)}
                 return c
@@ -1038,7 +1038,7 @@ class MAPFEnv(gym.Env):
             return result
 
         frame = painter(self.world.state, self.getPositions(), self.getGoals())
-        return frame
+        return frame'''
 
 
 if __name__ == "__main__":
