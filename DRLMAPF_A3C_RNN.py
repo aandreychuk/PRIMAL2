@@ -45,6 +45,8 @@ def load_dataset():
             array = json.loads(line.split(': ')[1])
             key = line.split(': ')[0]
             keys = key.split('-')
+            if int(keys[2]) != 50:
+                continue
             instances[key] = {'map': keys[0] + '-' + keys[1], 'num_agents': keys[2], 'seed': keys[3],
                               'starts': {}, 'goals': {}}
             for idx, value in enumerate(array[0]):
@@ -493,7 +495,7 @@ CHANGE_FREQUENCY = 5000  # Frequency of Changing environment params
 DIAG_MVMT = False  # Diagonal movements allowed?
 a_size = 5 + int(DIAG_MVMT) * 4
 NUM_META_AGENTS = 1
-NUM_THREADS = 25  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
+NUM_THREADS = 50  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
 NUM_BUFFERS = 1  # NO EXPERIENCE REPLAY int(NUM_THREADS / 2)
 
 # training parameters
