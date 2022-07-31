@@ -22,7 +22,7 @@ def normalized_columns_initializer(std=1.0):
 
 class ACNet:
     def __init__(self, scope, a_size, trainer, TRAINING, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE):
-        with tf.variable_scope(str(scope) + '/qvalues'):
+        with tf.variable_scope(str(scope) + '/qvalues', reuse=tf.AUTO_REUSE):
             # The input size may require more work to fit the interface.
             self.inputs = tf.placeholder(shape=[None, NUM_CHANNEL, OBS_SIZE, OBS_SIZE], dtype=tf.float32)
             self.goal_pos = tf.placeholder(shape=[None, 3], dtype=tf.float32)

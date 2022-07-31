@@ -69,7 +69,7 @@ class Worker:
 
         self.nextGIF = episode_count  # For GIFs output
         # Create the local copy of the network and the tensorflow op to copy global parameters to local network
-        self.local_AC = ACNet(self.name, a_size, trainer, True, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
+        self.local_AC = ACNet(f'worker_{workerID%24+1}', a_size, trainer, True, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
         self.pull_global = update_target_graph(GLOBAL_NET_SCOPE, self.name)
 
     def synchronize(self):
