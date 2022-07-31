@@ -45,7 +45,7 @@ def load_dataset():
             array = json.loads(line.split(': ')[1])
             key = line.split(': ')[0]
             keys = key.split('-')
-            if int(keys[2]) != 50:
+            if int(keys[2]) != 50 or 'mazes' not in key:
                 continue
             instances[key] = {'map': keys[0] + '-' + keys[1], 'num_agents': keys[2], 'seed': keys[3],
                               'starts': {}, 'goals': {}}
@@ -427,7 +427,7 @@ class Worker:
                         episode_count += 1
                         print('Episode Number:', episode_count, 'Steps Taken:', episode_step_count, 'Targets Done:',
                               swarm_targets[self.metaAgentID], ' Environment Number:', self.metaAgentID)
-                        out = open("log.txt", "a")
+                        out = open("log_mazes.txt", "a")
                         out.write(instance_id)
                         out.write(', '+str(episode_step_count))
                         out.write(', '+str(swarm_targets[self.metaAgentID]))
