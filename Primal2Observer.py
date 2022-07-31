@@ -269,7 +269,9 @@ class PRIMAL2Observer(ObservationBuilder):
                                             self.world.agents[agentID].goal_pos
                 astar_path.extend(
                     get_single_astar_path(distance_map1, start_pos1, self.num_future_steps - len(astar_path)))
-            print(astar_path)
+            #print(astar_path)
+            if not astar_path:
+                continue
             for i in range(self.num_future_steps - len(astar_path)):  # only happen when min_distance not sufficient
                 astar_path.extend([[astar_path[-1][-1]]])  # stay at the last pos
 

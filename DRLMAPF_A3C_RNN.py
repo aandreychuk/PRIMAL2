@@ -39,9 +39,9 @@ def load_dataset():
     with open("maps.yaml", 'r') as stream:
         maps = yaml.safe_load(stream)
     instances = {}
-    with open("instance.yaml", "r") as f:
+    with open("instances.yaml", "r") as f:
         for line in f.readlines():
-            print(line.split(': '))
+            #print(line.split(': '))
             array = json.loads(line.split(': ')[1])
             key = line.split(': ')[0]
             keys = key.split('-')
@@ -229,13 +229,17 @@ class Worker:
                      '{}/episodeIL_{}.gif'.format(gifs_path, episode_count))
         return result, count_finished
 
-    def work(self, max_episode_length, gamma, sess, coord, saver, maps, instances):
+    def work(self, max_episode_length, gamma, sess, coord, saver, maps, instances, num_agents):
         global GIF_frames, CHANGE_FREQUENCY, GIF_FREQUENCY, PURE_RL_FUNCTIONALITY, IL_agents_done, episode_count, swarm_reward, swarm_targets, episode_rewards, episode_finishes, episode_lengths, episode_mean_values, episode_stop_ops, episode_invalid_ops, episode_wrong_blocking, env_params  # , episode_invalid_goals
         last_reset = 0  # Local Variable Used For Tracking Curriculum Updates
-
+        total_runs = 0
         with sess.as_default(), sess.graph.as_default():
             for i in instances:
                 print(i)
+                total_runs += 1
+                if total_runs > 10:
+                    break
+                instance_id = i
                 sess.run(self.pull_global)
                 episode_buffer, episode_values = [], []
                 episode_reward = episode_step_count = episode_inv_count = targets_done = episode_stop_count = 0
@@ -245,8 +249,8 @@ class Worker:
                     global demon_probs, IL_DECAY_RATE, Prob_Demonstration
                     Prob_Demonstration = DEMONSTRATION_PROB * np.exp(episode_count * IL_DECAY_RATE)
                     self.env._reset(manual_generator(maps[instances[i]['map']]),
-                                    instances[i]['starts'],
-                                    instances[i]['goals'])
+                                    {key: value for key, value in instances[i]['starts'].items() if key <= num_agents},
+                                    {key: value for key, value in instances[i]['goals'].items() if key <= num_agents})
                     joint_observations[self.metaAgentID] = self.env._observe()
                     demon_probs[self.metaAgentID] = np.random.rand()  # for IL possibility
 
@@ -265,7 +269,7 @@ class Worker:
                 swarm_targets[self.metaAgentID] = 0
                 # ===============================start training =======================================================================
                 # IL
-                if episode_count < PRIMING_LENGTH or (demon_probs[self.metaAgentID] < Prob_Demonstration):
+                if False and (episode_count < PRIMING_LENGTH or (demon_probs[self.metaAgentID] < Prob_Demonstration)):
                     global rollouts
                     rollouts[self.metaAgentID] = None
                     if self.agentID == 1:
@@ -297,7 +301,7 @@ class Worker:
                 # RL
                 else:
                     # prepare to save GIF
-                    saveGIF = True
+                    saveGIF = False
                     if OUTPUT_GIFS and self.workerID == 1 and ((not TRAINING) or (episode_count >= self.nextGIF)):
                         saveGIF = True
                         print("trying make gif")
@@ -318,7 +322,7 @@ class Worker:
                                                                        self.local_AC.state_in[0]: rnn_state[0],
                                                                        self.local_AC.state_in[1]: rnn_state[1]})
                             train_policy = train_val = 1
-                            print(s)
+                            #print(s)
 
                         if not agent_done:
                             if not (np.argmax(a_dist.flatten()) in validActions):
@@ -421,8 +425,13 @@ class Worker:
                         episode_count += 1
                         print('Episode Number:', episode_count, 'Steps Taken:', episode_step_count, 'Targets Done:',
                               swarm_targets[self.metaAgentID], ' Environment Number:', self.metaAgentID)
-
-                        if episode_count % SUMMARY_WINDOW == 0:
+                        out = open("log.txt", "a")
+                        out.write(instance_id)
+                        out.write(', '+str(episode_step_count))
+                        out.write(', '+str(swarm_targets[self.metaAgentID]))
+                        out.write('\n')
+                        out.close()
+                        if False and episode_count % SUMMARY_WINDOW == 0:
                             if int(episode_count) % 100 == 0:
                                 print('Saving Model', end='\n')
                                 saver.save(sess, model_path + '/model-' + str(int(episode_count)) + '.cptk')
@@ -469,7 +478,7 @@ LR_Q = 2.e-5  # 8.e-5 / NUM_THREADS # default: 1e-5
 ADAPT_LR = True
 ADAPT_COEFF = 5.e-5  # the coefficient A in LR_Q/sqrt(A*steps+1) for calculating LR
 EXPERIENCE_BUFFER_SIZE = 256
-max_episode_length = 256
+max_episode_length = 512
 episode_count = 0
 
 # observer parameters
@@ -484,7 +493,7 @@ CHANGE_FREQUENCY = 5000  # Frequency of Changing environment params
 DIAG_MVMT = False  # Diagonal movements allowed?
 a_size = 5 + int(DIAG_MVMT) * 4
 NUM_META_AGENTS = 1
-NUM_THREADS = 24  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
+NUM_THREADS = 25  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
 NUM_BUFFERS = 1  # NO EXPERIENCE REPLAY int(NUM_THREADS / 2)
 
 # training parameters
@@ -495,9 +504,9 @@ training_version = 'primal2_oneshot'
 model_path = 'model_' + training_version
 gifs_path = 'gifs_' + training_version
 train_path = 'train_' + training_version
-OUTPUT_GIFS = True
+OUTPUT_GIFS = False
 GIF_FREQUENCY = 512
-SAVE_IL_GIF = True
+SAVE_IL_GIF = False
 IL_GIF_PROB = 0
 IS_ONESHOT = True
 
@@ -573,8 +582,8 @@ with tf.device("/gpu:0"):
                              map_generator=manual_generator(maps[instances[list(instances.keys())[0]]['map']]),
                              IsDiagonal=DIAG_MVMT,
                              isOneShot=IS_ONESHOT,
-                             start_poses=instances[list(instances.keys())[0]]['starts'],
-                             goal_poses=instances[list(instances.keys())[0]]['goals'])
+                             start_poses={key: value for key, value in instances[list(instances.keys())[0]]['starts'].items() if key <= num_agents},
+                             goal_poses={key: value for key, value in instances[list(instances.keys())[0]]['goals'].items() if key <= num_agents})
         gameEnvs.append(gameEnv)
 
         # Create groupLock
@@ -614,7 +623,7 @@ with tf.device("/gpu:0"):
         for ma in range(NUM_META_AGENTS):
             for worker in workers[ma]:
                 groupLocks[ma].acquire(0, worker.name)  # synchronize starting time of the threads
-                worker_work = lambda: worker.work(max_episode_length, gamma, sess, coord, saver, maps, instances)
+                worker_work = lambda: worker.work(max_episode_length, gamma, sess, coord, saver, maps, instances, num_agents)
                 print("Starting worker " + str(worker.workerID))
                 t = threading.Thread(target=worker_work)
                 t.start()
