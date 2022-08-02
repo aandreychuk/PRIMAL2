@@ -45,7 +45,7 @@ def load_dataset():
             array = json.loads(line.split(': ')[1])
             key = line.split(': ')[0]
             keys = key.split('-')
-            if int(keys[2]) != 50 or 'street' not in key:
+            if int(keys[2]) != 150 or int(keys[3]) > 9:
                 continue
             instances[key] = {'map': keys[0] + '-' + keys[1], 'num_agents': keys[2], 'seed': keys[3],
                               'starts': {}, 'goals': {}}
@@ -71,7 +71,7 @@ class Worker:
 
         self.nextGIF = episode_count  # For GIFs output
         # Create the local copy of the network and the tensorflow op to copy global parameters to local network
-        self.local_AC = ACNet(f'worker_{workerID%24+1}', a_size, trainer, True, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
+        self.local_AC = ACNet(f'worker_{workerID%24+1}', a_size, trainer, False, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
         self.pull_global = update_target_graph(GLOBAL_NET_SCOPE, self.name)
 
     def synchronize(self):
@@ -394,8 +394,7 @@ class Worker:
                                                               self.local_AC.state_in[0]: rnn_state[0],
                                                               self.local_AC.state_in[1]: rnn_state[1]})[0, 0]
 
-                            v_l, p_l, valid_l, e_l, g_n, v_n = self.train(train_buffer, sess, gamma,
-                                                                          s1Value, rnn_state0)
+                            #v_l, p_l, valid_l, e_l, g_n, v_n = self.train(train_buffer, sess, gamma, s1Value, rnn_state0)
 
                             rnn_state0 = rnn_state
 
@@ -425,7 +424,7 @@ class Worker:
                         episode_count += 1
                         print('Episode Number:', episode_count, 'Steps Taken:', episode_step_count, 'Targets Done:',
                               swarm_targets[self.metaAgentID], ' Environment Number:', self.metaAgentID)
-                        out = open("log_street.txt", "a")
+                        out = open("log_150_agents.txt", "a")
                         out.write(instance_id)
                         out.write(', '+str(episode_step_count))
                         out.write(', '+str(swarm_targets[self.metaAgentID]))
@@ -455,11 +454,11 @@ class Worker:
                                               simple_value=(mean_length - mean_invalid) / mean_length)
                             summary.value.add(tag='Perf/Stop Rate', simple_value=(mean_stop) / mean_length)
 
-                            summary.value.add(tag='Losses/Value Loss', simple_value=v_l)
-                            summary.value.add(tag='Losses/Policy Loss', simple_value=p_l)
-                            summary.value.add(tag='Losses/Valid Loss', simple_value=valid_l)
-                            summary.value.add(tag='Losses/Grad Norm', simple_value=g_n)
-                            summary.value.add(tag='Losses/Var Norm', simple_value=v_n)
+                            #summary.value.add(tag='Losses/Value Loss', simple_value=v_l)
+                            #summary.value.add(tag='Losses/Policy Loss', simple_value=p_l)
+                            #summary.value.add(tag='Losses/Valid Loss', simple_value=valid_l)
+                            #summary.value.add(tag='Losses/Grad Norm', simple_value=g_n)
+                            #summary.value.add(tag='Losses/Var Norm', simple_value=v_n)
                             global_summary.add_summary(summary, int(episode_count))
 
                             global_summary.flush()
@@ -493,7 +492,7 @@ CHANGE_FREQUENCY = 5000  # Frequency of Changing environment params
 DIAG_MVMT = False  # Diagonal movements allowed?
 a_size = 5 + int(DIAG_MVMT) * 4
 NUM_META_AGENTS = 1
-NUM_THREADS = 50  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
+NUM_THREADS = 150  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
 NUM_BUFFERS = 1  # NO EXPERIENCE REPLAY int(NUM_THREADS / 2)
 
 # training parameters
