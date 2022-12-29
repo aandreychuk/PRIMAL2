@@ -80,12 +80,12 @@ def run_1_test_wrapper(args, name):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--result_path", default="./continuous_testing_result/")
-    parser.add_argument("--env_path", default='./primal2_testing_envs50/')
+    parser.add_argument("--env_path", default='./new_testing_envs/')
     parser.add_argument("--num_worker", default=10, type=int)
     parser.add_argument("--printInfo", default=True, type=bool)
     parser.add_argument("-r", "--resume_testing", default=True, help="resume testing")
-    parser.add_argument("-g", "--GIF_prob", default=0., help="prob to write GIF")
-    parser.add_argument("-p", "--planner", default='RL', help="choose between mstar and RL")
+    parser.add_argument("-g", "--GIF_prob", default=1., help="prob to write GIF")
+    parser.add_argument("-p", "--planner", default='mstar', help="choose between mstar and RL")
     args = parser.parse_args()
 
     run_tests(args, args.env_path, args.result_path)

@@ -379,12 +379,12 @@ class ContinuousTestsRunner:
 if __name__ == "__main__":
     import time
 
-    model_path = './model_astar10_continuous/'
+    model_path = './model_primal2_continuous/'
     parser = argparse.ArgumentParser()
     parser.add_argument("--result_path", default="./testing_result/")
-    parser.add_argument("--env_path", default='./primal2_testing_envs50/')
+    parser.add_argument("--env_path", default='./new_testing_envs/')
     parser.add_argument("-r", "--resume_testing", default=True, help="resume testing")
-    parser.add_argument("-g", "--GIF_prob", default=0., help="write GIF")
+    parser.add_argument("-g", "--GIF_prob", default=1., help="write GIF")
     parser.add_argument("-t", "--type", default='continuous', help="choose between oneShot and continuous")
     parser.add_argument("-p", "--planner", default='mstar', help="choose between mstar and RL")
     parser.add_argument("-n", "--mapName", default=None, help="single map name for multiprocessing")

@@ -241,8 +241,9 @@ class World:
     Do not add action pruning, reward structure or any other routine for training in this class. Pls add in upper class MAPFEnv
     """
 
-    def __init__(self, map_generator, num_agents, isDiagonal=False):
+    def __init__(self, map_generator, num_agents, isDiagonal=False, isConventional=False):
         self.num_agents = num_agents
+        self.isConventional = isConventional
         self.manual_world = False
         self.manual_goal = False
         self.goal_generate_distance = 2
@@ -667,23 +668,6 @@ class World:
 
         return status_dict, newPos_dict
 
-
-class TestWorld(World):
-    def __init__(self, map_generator, world_info, isDiagonal=False, isConventional=False):
-        super().__init__(map_generator, num_agents=None, isDiagonal=isDiagonal)
-        [self.state, self.goals_map], \
-        self.agents_init_pos, self.corridor_map, self.corridors, self.agents = world_info
-        self.corridor_map, self.corridors = self.corridor_map[()], self.corridors[()]
-        # print("Initial Positions : ", self.agents_init_pos)
-        self.num_agents = len(self.agents_init_pos.keys())
-        self.isConventional = isConventional
-
-    def reset_world(self):
-        pass
-
-    def init_agents_and_goals(self):
-        pass
-
     def put_goals(self, id_list, manual_pos=None):
         """
         NO DISTANCE MAPS FOR MSTAR!!
@@ -804,6 +788,22 @@ class TestWorld(World):
             return 1
         else:
             return None
+
+
+class TestWorld(World):
+    def __init__(self, map_generator, world_info, isDiagonal=False, isConventional=False):
+        super().__init__(map_generator, num_agents=None, isDiagonal=isDiagonal)
+        [self.state, self.goals_map], \
+        self.agents_init_pos, self.corridor_map, self.corridors, self.agents = world_info
+        self.corridor_map, self.corridors = self.corridor_map[()], self.corridors[()]
+        # print("Initial Positions : ", self.agents_init_pos)
+        self.num_agents = len(self.agents_init_pos.keys())
+
+    def reset_world(self):
+        pass
+
+    def init_agents_and_goals(self):
+        pass
 
 
 class MAPFEnv(gym.Env):

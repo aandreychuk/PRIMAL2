@@ -212,12 +212,12 @@ class MazeTestInfoAdder(MazeTestGenerator):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--num_agents", default=[4, 8, 16, 32, 64, 128, 256], help="number of agents in the env")
+    parser.add_argument("-n", "--num_agents", default=[4, 8, 16, 32, 64], help="number of agents in the env")
     parser.add_argument("-s", "--env_size", default=[20, 40, 80, 160], help="env size")
     parser.add_argument("-d", "--obs_dense", default=[0.3 + 0.15 * i for i in range(4)],
                         help="obstacle density of the env")
     parser.add_argument("-w", "--wall_component", default=[1, 6, 12, 20], help="average length of each wall")
-    parser.add_argument("-t", "--num_tests", default=20, help="number of tests per env setting")
+    parser.add_argument("-t", "--num_tests", default=1, help="number of tests per env setting")
     parser.add_argument("-e", "--env_dir", default='./new_testing_envs', help="dir where you want to save the envs")
     parser.add_argument("-p", "--printInfo", default=True, help="if you want to print generated env info")
     parser.add_argument("-a", "--addInfo", default=False, help="switch between addInfo mode and map generation mode")
