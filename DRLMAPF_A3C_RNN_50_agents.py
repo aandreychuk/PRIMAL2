@@ -39,9 +39,9 @@ def load_dataset():
     with open("maps.yaml", 'r') as stream:
         maps = yaml.safe_load(stream)
     instances = {}
+
     with open("instances.yaml", "r") as f:
         for line in f.readlines():
-            #print(line.split(': '))
             array = json.loads(line.split(': ')[1])
             key = line.split(': ')[0]
             keys = key.split('-')
@@ -53,6 +53,10 @@ def load_dataset():
                 instances[key]['starts'][idx + 1] = value
             for idx, value in enumerate(array[1]):
                 instances[key]['goals'][idx + 1] = value
+            if keys[1] == 's49_wc2_od50' and keys[3] == '7':
+                print(key)
+                print(instances[key]['starts'])
+                print(instances[key]['goals'])
 
     return maps, instances
 
@@ -68,10 +72,11 @@ class Worker:
         self.name = "worker_" + str(workerID)
         self.agentID = ((workerID - 1) % num_workers) + 1
         self.groupLock = groupLock
+        self.a_size = a_size
 
         self.nextGIF = episode_count  # For GIFs output
         # Create the local copy of the network and the tensorflow op to copy global parameters to local network
-        self.local_AC = ACNet(f'worker_{workerID%24+1}', a_size, trainer, False, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
+        self.local_AC = ACNet(GLOBAL_NET_SCOPE, a_size, trainer, False, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
         self.pull_global = update_target_graph(GLOBAL_NET_SCOPE, self.name)
 
     def synchronize(self):
@@ -248,9 +253,10 @@ class Worker:
                 if self.agentID == 1:
                     global demon_probs, IL_DECAY_RATE, Prob_Demonstration
                     Prob_Demonstration = DEMONSTRATION_PROB * np.exp(episode_count * IL_DECAY_RATE)
-                    self.env._reset(manual_generator(maps[instances[i]['map']]),
-                                    {key: value for key, value in instances[i]['starts'].items() if key <= num_agents},
-                                    {key: value for key, value in instances[i]['goals'].items() if key <= num_agents})
+                    self.env._reset(manual_generator(maps[data[0]['map_name']]),
+                             {a['agent_id'] + 1: a['start'] for a in data[0]['task'] if a['agent_id'] < num_agents},
+                             {a['agent_id'] + 1: a['goals'][0] for a in data[0]['task'] if a['agent_id'] < num_agents},
+                             {a['agent_id'] + 1: a['goals'][1:] for a in data[0]['task'] if a['agent_id'] < num_agents})
                     joint_observations[self.metaAgentID] = self.env._observe()
                     demon_probs[self.metaAgentID] = np.random.rand()  # for IL possibility
 
@@ -313,6 +319,16 @@ class Worker:
                     self.env.finished = False
                     agent_done = False
                     while not self.env.finished:  # Give me something!
+                        '''tf.Print(self.local_AC.goal_pos, [self.local_AC.goal_pos])
+                        if self.env.world.goals_updated is not None:
+                            if self.agentID in self.env.world.goals_updated:
+                                #self.local_AC = ACNet(GLOBAL_NET_SCOPE, a_size, trainer, False, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE)
+                                #print(s[1], 'new goal')
+                                #tf.Print(self.local_AC.goal_pos, [self.local_AC.goal_pos])
+                                self.env.world.goals_updated = None
+                                #rnn_state = self.local_AC.state_init
+                                #print("Local AC recreated", agent_done, self.env.finished)
+                                agent_done = False'''
                         if not agent_done:
                             a_dist, v, rnn_state = sess.run([self.local_AC.policy,
                                                              self.local_AC.value,
@@ -401,8 +417,8 @@ class Worker:
                         self.synchronize()
 
                         # finish condition: reach max-len or all agents are done under one-shot mode
-                        if joint_done[self.metaAgentID][self.agentID]:
-                            agent_done = True
+                        #if joint_done[self.metaAgentID][self.agentID]:
+                        #    agent_done = True
                         if episode_step_count >= max_episode_length or (
                                 IS_ONESHOT and all(
                             [self.env.world.getDone(agentID) for agentID in range(1, num_agents + 1)]) is True):
@@ -469,6 +485,7 @@ class Worker:
                                                                               episode_step_count,
                                                                               swarm_reward[self.metaAgentID]))
                     self.synchronize()
+                break
 
 
 # Learning parameters
@@ -492,22 +509,22 @@ CHANGE_FREQUENCY = 5000  # Frequency of Changing environment params
 DIAG_MVMT = False  # Diagonal movements allowed?
 a_size = 5 + int(DIAG_MVMT) * 4
 NUM_META_AGENTS = 1
-NUM_THREADS = 50  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
+NUM_THREADS = 1  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
 NUM_BUFFERS = 1  # NO EXPERIENCE REPLAY int(NUM_THREADS / 2)
 
 # training parameters
 SUMMARY_WINDOW = 10
 load_model = True
 RESET_TRAINER = False
-training_version = 'primal2_oneshot'
+training_version = 'primal2_continuous'
 model_path = 'model_' + training_version
 gifs_path = 'gifs_' + training_version
 train_path = 'train_' + training_version
-OUTPUT_GIFS = False
+OUTPUT_GIFS = True
 GIF_FREQUENCY = 512
 SAVE_IL_GIF = False
 IL_GIF_PROB = 0
-IS_ONESHOT = True
+IS_ONESHOT = False
 
 # Imitation options
 PRIMING_LENGTH = 0  # number of episodes at the beginning to train only on demonstrations
@@ -572,17 +589,22 @@ with tf.device("/gpu:0"):
     num_workers = NUM_THREADS  # Set workers # = # of available CPU threads
     gameEnvs, workers, groupLocks = [], [], []
     n = 1  # counter of total number of agents (for naming)
+    with open('tasks.json', 'r') as f:
+        data = json.load(f)
 
     maps, instances = load_dataset()
+    print(data[0]['map_name'])
+    print(maps[data[0]['map_name']])
     for ma in range(NUM_META_AGENTS):
         num_agents = NUM_THREADS
         gameEnv = PRIMAL2Env(num_agents=num_agents,
                              observer=PRIMAL2Observer(observation_size=OBS_SIZE),
-                             map_generator=manual_generator(maps[instances[list(instances.keys())[0]]['map']]),
+                             map_generator=manual_generator(maps[data[0]['map_name']]),
                              IsDiagonal=DIAG_MVMT,
                              isOneShot=IS_ONESHOT,
-                             start_poses={key: value for key, value in instances[list(instances.keys())[0]]['starts'].items() if key <= num_agents},
-                             goal_poses={key: value for key, value in instances[list(instances.keys())[0]]['goals'].items() if key <= num_agents})
+                             start_poses={a['agent_id'] + 1: a['start'] for a in data[0]['task'] if a['agent_id'] < num_agents},
+                             goal_poses={a['agent_id'] + 1: a['goals'][0] for a in data[0]['task'] if a['agent_id'] < num_agents},
+                             all_goals={a['agent_id'] + 1: a['goals'][1:] for a in data[0]['task'] if a['agent_id'] < num_agents})
         gameEnvs.append(gameEnv)
 
         # Create groupLock

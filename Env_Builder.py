@@ -8,7 +8,7 @@ from od_mstar3.col_set_addition import OutOfTimeError, NoSolutionError
 from od_mstar3 import od_mstar
 from GroupLock import Lock
 from matplotlib.colors import *
-#from gym.envs.classic_control import rendering
+from gym.envs.classic_control import rendering
 import imageio
 from gym import spaces
 
@@ -222,11 +222,13 @@ class World:
     Do not add action pruning, reward structure or any other routine for training in this class. Pls add in upper class MAPFEnv
     """
 
-    def __init__(self, map_generator, num_agents, isDiagonal=False, agents_init_pos=None, goals_init_pos=None):
+    def __init__(self, map_generator, num_agents, isDiagonal=False, agents_init_pos=None, goals_init_pos=None, all_goals=None):
         self.num_agents = num_agents
         self.manual_world = False
         self.manual_goal = False
         self.goal_generate_distance = 2
+        self.goals_updated = None
+        self.all_goals = all_goals
 
         self.map_generator = map_generator
         self.isDiagonal = isDiagonal
@@ -568,8 +570,8 @@ class World:
         :param id_list: a list of agentID
         :return: an Agent object
         """
-        print(id_list, manual_pos, 'put goals')
-
+        #print(id_list, manual_pos, 'put goals')
+        self.goals_updated = id_list
         def random_goal_pos(previous_goals=None, distance=None):
             if previous_goals is None:
                 previous_goals = {agentID: None for agentID in id_list}
@@ -617,6 +619,7 @@ class World:
         if new_goals is not None:  # recursive breaker
             refresh_distance_map = False
             for agentID in id_list:
+                print(id_list, manual_pos)
                 if self.state[new_goals[agentID][0], new_goals[agentID][1]] >= 0:
                     if self.agents[agentID].next_goal is None:  # no next_goal to use
                         # set goals_map
@@ -624,10 +627,12 @@ class World:
                         # set agent.goal_pos
                         self.agents[agentID].goal_pos = (new_goals[agentID][0], new_goals[agentID][1])
                         # set agent.next_goal
-                        new_next_goals = random_goal_pos(new_goals, distance=self.goal_generate_distance)
+                        new_next_goals = (self.all_goals[agentID][0][0], self.all_goals[agentID][0][1])#random_goal_pos(new_goals, distance=self.goal_generate_distance)
+                        self.all_goals[agentID] = self.all_goals[agentID][1:]
+                        print(self.all_goals[agentID][0], 'actual next goal?')
                         if new_next_goals is None:
                             return None
-                        self.agents[agentID].next_goal = (new_next_goals[agentID][0], new_next_goals[agentID][1])
+                        self.agents[agentID].next_goal = new_next_goals
                         # remove previous goal
                         if previous_goals[agentID] is not None:
                             self.goals_map[previous_goals[agentID][0], previous_goals[agentID][1]] = 0
@@ -659,8 +664,10 @@ class World:
                 self.agents[agentID].next_distanceMap = getAstarDistanceMap(self.state, self.agents[agentID].goal_pos,
                                                                             self.agents[agentID].next_goal)
                 if refresh_distance_map:
+                    print('refresh distance map')
                     self.agents[agentID].distanceMap = getAstarDistanceMap(self.state, self.agents[agentID].position,
                                                                            self.agents[agentID].goal_pos)
+                print(self.agents[agentID].position, self.agents[agentID].goal_pos, self.agents[agentID].next_goal, 'current, goal, next_goal poses')
             return 1
         else:
             return None
@@ -766,7 +773,7 @@ class MAPFEnv(gym.Env):
 
     def __init__(self, observer, map_generator, num_agents,
                  IsDiagonal=False, isOneShot=False,
-                 start_poses=None, goal_poses=None):
+                 start_poses=None, goal_poses=None, all_goals=None):
         self.observer = observer
         self.map_generator = map_generator
         self.viewer = None
@@ -776,6 +783,7 @@ class MAPFEnv(gym.Env):
         self.IsDiagonal = IsDiagonal
         self.start_poses = start_poses
         self.goal_poses = goal_poses
+        self.all_goals = all_goals
         self.set_world()
         self.obs_size = self.observer.observation_size
         self.isStandingOnGoal = {i: False for i in range(1, self.num_agents + 1)}
@@ -808,7 +816,8 @@ class MAPFEnv(gym.Env):
     def set_world(self):
         self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal,
                            agents_init_pos=self.start_poses,
-                           goals_init_pos=self.goal_poses)
+                           goals_init_pos=self.goal_poses,
+                           all_goals=self.all_goals)
         self.num_agents = self.world.num_agents
         self.observer.set_env(self.world)
 
@@ -861,6 +870,10 @@ class MAPFEnv(gym.Env):
         status_dict, newPos_dict = self.world.CheckCollideStatus(movement_dict)
         self.world.state[self.world.state > 0] = 0  # remove agents in the map
         put_goal_list = []
+        if self.all_goals is not None:
+            manual_goals = {}
+        else:
+            manual_goals = None
         self.done = True
         for agentID in range(1, self.num_agents + 1):
             if self.isOneShot and self.world.getDone(agentID) > 0:
@@ -880,6 +893,10 @@ class MAPFEnv(gym.Env):
             if status_dict[agentID] == 1:
                 if not self.isOneShot:
                     put_goal_list.append(agentID)
+                    if self.all_goals is not None:
+                        manual_goals[agentID] = self.all_goals[agentID][0]
+                        if len(self.all_goals[agentID]) > 1:
+                            self.all_goals[agentID] = self.all_goals[agentID][1:]
                 else:
                     if self.world.state[newPos] == 0:
                         self.world.state[newPos] = 0
@@ -888,7 +905,7 @@ class MAPFEnv(gym.Env):
         free_agents = list(range(1, self.num_agents + 1))
 
         if put_goal_list and not self.isOneShot:
-            self.world.put_goals(put_goal_list)
+            self.world.put_goals(put_goal_list, manual_goals)
 
         return self._observe(free_agents), self.individual_rewards
 
@@ -925,8 +942,7 @@ class MAPFEnv(gym.Env):
             self.viewer.add_onetime(entry)
 
     def _render(self, mode='human', close=False, screen_width=800, screen_height=800):
-        pass
-        '''def painter(state_map, agents_dict, goals_dict):
+        def painter(state_map, agents_dict, goals_dict):
             def initColors(num_agents):
                 c = {a + 1: hsv_to_rgb(np.array([a / float(num_agents), 1, 1])) for a in range(num_agents)}
                 return c
@@ -1011,7 +1027,7 @@ class MAPFEnv(gym.Env):
                     continue
                 rect = create_rectangle(x, y, world_size, world_size, color)
                 self._add_rendering_entry(rect)
-
+                #print(goals_dict, 'goals dict in painter')
                 i, j = goals_dict[agent]
                 x = i * world_size
                 y = j * world_size
@@ -1038,7 +1054,7 @@ class MAPFEnv(gym.Env):
             return result
 
         frame = painter(self.world.state, self.getPositions(), self.getGoals())
-        return frame'''
+        return frame
 
 
 if __name__ == "__main__":

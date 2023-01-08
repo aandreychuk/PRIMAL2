@@ -20,11 +20,12 @@ class PRIMAL2Env(MAPFEnv):
 
     def __init__(self, observer, map_generator, num_agents=None,
                  IsDiagonal=False, frozen_steps=0, isOneShot=False,
-                 start_poses=None, goal_poses=None):
+                 start_poses=None, goal_poses=None, all_goals=None):
         super(PRIMAL2Env, self).__init__(observer=observer, map_generator=map_generator,
                                          num_agents=num_agents,
                                          IsDiagonal=IsDiagonal, isOneShot=isOneShot,
-                                         start_poses=start_poses, goal_poses=goal_poses)
+                                         start_poses=start_poses, goal_poses=goal_poses,
+                                         all_goals=all_goals)
 
     def _reset(self, new_generator=None, *args):
         if new_generator is None:
@@ -32,7 +33,7 @@ class PRIMAL2Env(MAPFEnv):
         else:
             self.map_generator = new_generator
             self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal,
-                               agents_init_pos=args[0], goals_init_pos=args[1])
+                               agents_init_pos=args[0], goals_init_pos=args[1], all_goals=args[2])
             self.num_agents = self.world.num_agents
             self.observer.set_env(self.world)
 
