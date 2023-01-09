@@ -35,32 +35,6 @@ def discount(x, gamma):
     return signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
 
 
-def load_dataset():
-    with open("maps.yaml", 'r') as stream:
-        maps = yaml.safe_load(stream)
-    instances = {}
-
-    with open("instances.yaml", "r") as f:
-        for line in f.readlines():
-            array = json.loads(line.split(': ')[1])
-            key = line.split(': ')[0]
-            keys = key.split('-')
-            if int(keys[2]) != 50 or int(keys[3]) > 9:
-                continue
-            instances[key] = {'map': keys[0] + '-' + keys[1], 'num_agents': keys[2], 'seed': keys[3],
-                              'starts': {}, 'goals': {}}
-            for idx, value in enumerate(array[0]):
-                instances[key]['starts'][idx + 1] = value
-            for idx, value in enumerate(array[1]):
-                instances[key]['goals'][idx + 1] = value
-            if keys[1] == 's49_wc2_od50' and keys[3] == '7':
-                print(key)
-                print(instances[key]['starts'])
-                print(instances[key]['goals'])
-
-    return maps, instances
-
-
 # ## Worker Agent
 
 # In[ ]:
@@ -73,6 +47,7 @@ class Worker:
         self.agentID = ((workerID - 1) % num_workers) + 1
         self.groupLock = groupLock
         self.a_size = a_size
+        self.results = []
 
         self.nextGIF = episode_count  # For GIFs output
         # Create the local copy of the network and the tensorflow op to copy global parameters to local network
@@ -241,8 +216,7 @@ class Worker:
         last_reset = 0  # Local Variable Used For Tracking Curriculum Updates
         total_runs = 0
         with sess.as_default(), sess.graph.as_default():
-            for i in instances:
-                print(i)
+            for i in range(len(instances)):
                 total_runs += 1
                 instance_id = i
                 sess.run(self.pull_global)
@@ -251,12 +225,17 @@ class Worker:
 
                 # Initial state from the environment
                 if self.agentID == 1:
+                    print(i, instances[i]['map_name'], instances[i]['seed'])
                     global demon_probs, IL_DECAY_RATE, Prob_Demonstration
                     Prob_Demonstration = DEMONSTRATION_PROB * np.exp(episode_count * IL_DECAY_RATE)
-                    self.env._reset(manual_generator(maps[data[0]['map_name']]),
-                             {a['agent_id'] + 1: a['start'] for a in data[0]['task'] if a['agent_id'] < num_agents},
-                             {a['agent_id'] + 1: a['goals'][0] for a in data[0]['task'] if a['agent_id'] < num_agents},
-                             {a['agent_id'] + 1: a['goals'][1:] for a in data[0]['task'] if a['agent_id'] < num_agents})
+                    self.env = PRIMAL2Env(num_agents=num_agents,
+                             observer=PRIMAL2Observer(observation_size=OBS_SIZE),
+                             map_generator=manual_generator(maps[instances[i]['map_name']]),
+                             IsDiagonal=DIAG_MVMT,
+                             isOneShot=IS_ONESHOT,
+                             start_poses={a['agent_id'] + 1: a['start'] for a in instances[i]['task'] if a['agent_id'] < num_agents},
+                             goal_poses={a['agent_id'] + 1: a['goals'][0] for a in instances[i]['task'] if a['agent_id'] < num_agents},
+                             all_goals={a['agent_id'] + 1: a['goals'][1:] for a in instances[i]['task'] if a['agent_id'] < num_agents})
                     joint_observations[self.metaAgentID] = self.env._observe()
                     demon_probs[self.metaAgentID] = np.random.rand()  # for IL possibility
 
@@ -440,12 +419,12 @@ class Worker:
                         episode_count += 1
                         print('Episode Number:', episode_count, 'Steps Taken:', episode_step_count, 'Targets Done:',
                               swarm_targets[self.metaAgentID], ' Environment Number:', self.metaAgentID)
-                        out = open("log_50_agents.txt", "a")
-                        out.write(instance_id)
-                        out.write(', '+str(episode_step_count))
-                        out.write(', '+str(swarm_targets[self.metaAgentID]))
-                        out.write('\n')
-                        out.close()
+                        self.results.append({'instance_id': instance_id,
+                                             'map_name': instances[instance_id]['map_name'],
+                                             'seed': instances[instance_id]['seed'],
+                                             'goals_reached': swarm_targets[self.metaAgentID]})
+                        with open('results_4_agents.json', 'w') as out:
+                            json.dump(self.results, out, indent=1)
                         if False and episode_count % SUMMARY_WINDOW == 0:
                             if int(episode_count) % 100 == 0:
                                 print('Saving Model', end='\n')
@@ -485,7 +464,6 @@ class Worker:
                                                                               episode_step_count,
                                                                               swarm_reward[self.metaAgentID]))
                     self.synchronize()
-                break
 
 
 # Learning parameters
@@ -509,7 +487,7 @@ CHANGE_FREQUENCY = 5000  # Frequency of Changing environment params
 DIAG_MVMT = False  # Diagonal movements allowed?
 a_size = 5 + int(DIAG_MVMT) * 4
 NUM_META_AGENTS = 1
-NUM_THREADS = 1  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
+NUM_THREADS = 4  # int(multiprocessing.cpu_count() / (2 * NUM_META_AGENTS))
 NUM_BUFFERS = 1  # NO EXPERIENCE REPLAY int(NUM_THREADS / 2)
 
 # training parameters
@@ -520,7 +498,7 @@ training_version = 'primal2_continuous'
 model_path = 'model_' + training_version
 gifs_path = 'gifs_' + training_version
 train_path = 'train_' + training_version
-OUTPUT_GIFS = True
+OUTPUT_GIFS = False
 GIF_FREQUENCY = 512
 SAVE_IL_GIF = False
 IL_GIF_PROB = 0
@@ -590,21 +568,19 @@ with tf.device("/gpu:0"):
     gameEnvs, workers, groupLocks = [], [], []
     n = 1  # counter of total number of agents (for naming)
     with open('tasks.json', 'r') as f:
-        data = json.load(f)
-
-    maps, instances = load_dataset()
-    print(data[0]['map_name'])
-    print(maps[data[0]['map_name']])
+        instances = json.load(f)
+    with open("maps.yaml", 'r') as stream:
+        maps = yaml.safe_load(stream)
     for ma in range(NUM_META_AGENTS):
         num_agents = NUM_THREADS
         gameEnv = PRIMAL2Env(num_agents=num_agents,
                              observer=PRIMAL2Observer(observation_size=OBS_SIZE),
-                             map_generator=manual_generator(maps[data[0]['map_name']]),
+                             map_generator=manual_generator(maps[instances[1]['map_name']]),
                              IsDiagonal=DIAG_MVMT,
                              isOneShot=IS_ONESHOT,
-                             start_poses={a['agent_id'] + 1: a['start'] for a in data[0]['task'] if a['agent_id'] < num_agents},
-                             goal_poses={a['agent_id'] + 1: a['goals'][0] for a in data[0]['task'] if a['agent_id'] < num_agents},
-                             all_goals={a['agent_id'] + 1: a['goals'][1:] for a in data[0]['task'] if a['agent_id'] < num_agents})
+                             start_poses={a['agent_id'] + 1: a['start'] for a in instances[1]['task'] if a['agent_id'] < num_agents},
+                             goal_poses={a['agent_id'] + 1: a['goals'][0] for a in instances[1]['task'] if a['agent_id'] < num_agents},
+                             all_goals={a['agent_id'] + 1: a['goals'][1:] for a in instances[1]['task'] if a['agent_id'] < num_agents})
         gameEnvs.append(gameEnv)
 
         # Create groupLock
@@ -641,6 +617,9 @@ with tf.device("/gpu:0"):
         # This is where the asynchronous magic happens.
         # Start the "work" process for each worker in a separate thread.
         worker_threads = []
+
+        for i in range(0, len(instances)):
+            print(i, instances[i]['map_name'], instances[i]['seed'])
         for ma in range(NUM_META_AGENTS):
             for worker in workers[ma]:
                 groupLocks[ma].acquire(0, worker.name)  # synchronize starting time of the threads

@@ -231,9 +231,10 @@ class PRIMAL2Observer(ObservationBuilder):
                 h = self.world.state.shape[0]
                 w = self.world.state.shape[1]
                 for direction in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
-                    # print(position, direction)
+                    #print(position, direction)
                     new_pos = tuple_plus(position, direction)
                     if 0 <= new_pos[0] < h and 0 <= new_pos[1] < w:
+                        #print(distance_map[new_pos], distance_map[position] - 1, distance_map[new_pos])
                         if distance_map[new_pos] == distance_map[position] - 1 \
                                 and distance_map[new_pos] >= 0:
                             next_astar_cell.append(new_pos)

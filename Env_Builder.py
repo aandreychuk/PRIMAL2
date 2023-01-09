@@ -8,7 +8,7 @@ from od_mstar3.col_set_addition import OutOfTimeError, NoSolutionError
 from od_mstar3 import od_mstar
 from GroupLock import Lock
 from matplotlib.colors import *
-from gym.envs.classic_control import rendering
+#from gym.envs.classic_control import rendering
 import imageio
 from gym import spaces
 
@@ -228,13 +228,13 @@ class World:
         self.manual_goal = False
         self.goal_generate_distance = 2
         self.goals_updated = None
-        self.all_goals = all_goals
 
         self.map_generator = map_generator
         self.isDiagonal = isDiagonal
 
         self.agents_init_pos = agents_init_pos
         self.goals_init_pos = goals_init_pos
+        self.all_goals = all_goals
         self.reset_world()
         self.init_agents_and_goals()
 
@@ -253,6 +253,13 @@ class World:
             return agents
 
         self.state, self.goals_map = self.map_generator()
+        '''for s in self.state:
+            for c in s:
+                if c == 0:
+                    print('.', end='')
+                else:
+                    print('#', end='')
+            print()'''
         self.manual_world = True
         self.manual_goal = True
         self.num_agents = len(self.agents_init_pos.keys())
@@ -619,7 +626,6 @@ class World:
         if new_goals is not None:  # recursive breaker
             refresh_distance_map = False
             for agentID in id_list:
-                print(id_list, manual_pos)
                 if self.state[new_goals[agentID][0], new_goals[agentID][1]] >= 0:
                     if self.agents[agentID].next_goal is None:  # no next_goal to use
                         # set goals_map
@@ -629,7 +635,6 @@ class World:
                         # set agent.next_goal
                         new_next_goals = (self.all_goals[agentID][0][0], self.all_goals[agentID][0][1])#random_goal_pos(new_goals, distance=self.goal_generate_distance)
                         self.all_goals[agentID] = self.all_goals[agentID][1:]
-                        print(self.all_goals[agentID][0], 'actual next goal?')
                         if new_next_goals is None:
                             return None
                         self.agents[agentID].next_goal = new_next_goals
@@ -664,10 +669,8 @@ class World:
                 self.agents[agentID].next_distanceMap = getAstarDistanceMap(self.state, self.agents[agentID].goal_pos,
                                                                             self.agents[agentID].next_goal)
                 if refresh_distance_map:
-                    print('refresh distance map')
                     self.agents[agentID].distanceMap = getAstarDistanceMap(self.state, self.agents[agentID].position,
                                                                            self.agents[agentID].goal_pos)
-                print(self.agents[agentID].position, self.agents[agentID].goal_pos, self.agents[agentID].next_goal, 'current, goal, next_goal poses')
             return 1
         else:
             return None
