@@ -78,10 +78,6 @@ auto/
 
 # Learning #
 ###################
-#checkpoint
-*.cptk.data-*
-*.cptk.index
-*.cptk.meta
 *.gif
 *.GIF
 
