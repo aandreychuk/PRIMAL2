@@ -1,4 +1,3 @@
-import json
 import os
 import argparse
 from PRIMAL2_Observer import PRIMAL2_Observer
@@ -7,7 +6,9 @@ import tensorflow as tf
 from ACNet import ACNet
 from Map_Generator import *
 from Env_Builder import *
-
+import yaml
+import json
+from os.path import exists
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore', category=Warning)
 
@@ -210,13 +211,9 @@ class MstarContinuousPlanner(MAPFEnv):
         self.test_type = 'continuous'
         self.method = '_' + self.test_type + 'mstar'
 
-    def _reset(self, map_generator=None, worldInfo=None):
+    def _reset(self, map_generator=None, starts=None, goals=None, all_goals=None):
         self.map_generator = map_generator
-        if worldInfo is not None:
-            self.world = TestWorld(self.map_generator, world_info=worldInfo, isDiagonal=self.IsDiagonal,
-                                   isConventional=True)
-        else:
-            self.world = World(self.map_generator, num_agents=self.num_agents, isDiagonal=self.IsDiagonal)
+        self.world = World(self.map_generator, starts=starts, goals=goals, all_goals=all_goals, num_agents=self.num_agents, isDiagonal=self.IsDiagonal)
         self.num_agents = self.world.num_agents
         self.observer.set_env(self.world)
         self.fresh = True
@@ -332,35 +329,37 @@ class ContinuousTestsRunner:
         maps = np.load(root + name, allow_pickle=True)
         return maps
 
-    def run_1_test(self, name, maps):
-        def get_maxLength(env_size):
-            if env_size <= 40:
-                return 128
-            elif env_size <= 80:
-                return 192
-            return 256
-
-        self.worker._reset(map_generator=manual_generator(maps[0][0], maps[0][1]),
-                           worldInfo=maps)
-        env_name = name[:name.rfind('.')]
-        env_size = int(env_name[env_name.find("_") + 1:env_name.find("size")])
-        max_length = get_maxLength(env_size)
+    def run_1_test(self, maps, instance, num_agents, seed):
+        self.worker.num_agents = num_agents
+        self.worker._reset(map_generator=manual_generator(maps[instance['map_name']]),
+                           starts={a['agent_id'] + 1: a['start'] for a in instance['task'] if a['agent_id'] < num_agents},
+                           goals={a['agent_id'] + 1: a['goals'][0] for a in instance['task'] if a['agent_id'] < num_agents},
+                           all_goals={a['agent_id'] + 1: a['goals'][1:] for a in instance['task'] if a['agent_id'] < num_agents})
+        max_length = 512
         results = dict()
 
-        print("working on " + env_name)
 
-        result = self.worker.find_path(max_length=int(max_length), saveImage=np.random.rand() < self.GIF_prob)
+        print("working on " + instance['map_name'])
+
+        result = self.worker.find_path(max_length=int(max_length), saveImage=False)#np.random.rand() < self.GIF_prob)
 
         target_reached, computing_time_list, num_crash, episode_status, succeed_episode, step_count, frames = result
-        results['target_reached'] = target_reached
-        results['computing time'] = computing_time_list
-        results['num_crash'] = num_crash
-        results['status'] = episode_status
-        results['isSuccessful'] = succeed_episode
-        results['steps'] = str(step_count) + '/' + str(max_length)
+        if exists('results.json'):
+            with open('results.json', 'r') as f:
+                all_results = json.load(f)
+                f.close()
+        else:
+            all_results = []
+        results['results'] = {'avg_throughput':target_reached/512, 'reached_goals':target_reached}
+        results['resolved_vars'] = {'algo': 'ODrM*', 'map_name': instance['map_name'], 'num_agents': num_agents, 'seed': seed}
+        results['id'] = len(all_results)
+        all_results.append(results)
+        with open('results.json', 'w') as f:
+            json.dump(all_results, f, indent=1)
+            f.close()
 
-        self.make_gif(frames, env_name, self.test_method)
-        self.write_files(results, env_name, self.test_method)
+        self.make_gif(frames, instance['map_name'], self.test_method)
+        self.write_files(results, instance['map_name'], "_"+str(num_agents))
         return
 
     def make_gif(self, image, env_name, ext):
@@ -387,7 +386,10 @@ if __name__ == "__main__":
     parser.add_argument("-g", "--GIF_prob", default=1., help="write GIF")
     parser.add_argument("-t", "--type", default='continuous', help="choose between oneShot and continuous")
     parser.add_argument("-p", "--planner", default='mstar', help="choose between mstar and RL")
-    parser.add_argument("-n", "--mapName", default=None, help="single map name for multiprocessing")
+    parser.add_argument("-m", "--map_name", default=None, help="single map name for multiprocessing")
+    parser.add_argument("-s", "--seed", default=0, type=int)
+    parser.add_argument("-n", "--num_agents", default=4, type=int)
+
     args = parser.parse_args()
 
     # set a tester--------------------------------------------
@@ -414,9 +416,19 @@ if __name__ == "__main__":
     else:
         raise NameError('invalid planner type')
     # run the tests---------------------------------------------------------
+    with open('tasks.json', 'r') as f:
+        instances = json.load(f)
+    filtered_instances = []
 
-    maps = tester.read_single_env(args.mapName)
-    if maps is None:
-        print(args.mapName, " already completed")
-    else:
-        tester.run_1_test(args.mapName, maps)
+    instance = None
+    for i in instances:
+        if i['map_name'] == args.map_name and i['seed'] == int(args.seed):
+            instance = i
+            break
+    if instance is None:
+        print(f'Required instance with map_name:{args.map_name} and seed:{args.seed} not found')
+        exit(1)
+    print('running ', args.map_name, args.num_agents, args.seed)
+    with open("maps.yaml", 'r') as stream:
+        maps = yaml.safe_load(stream)
+    tester.run_1_test(maps, instance, args.num_agents, args.seed)

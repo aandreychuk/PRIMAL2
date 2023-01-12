@@ -19,9 +19,10 @@ try:
 except ImportError:
     USE_Cython_ASTAR = False
     raise ImportError('cpp_aStar not compiled. Please refer to README. Switched to py-astar automatically')
+USE_Cython_ASTAR = False
 from GroupLock import Lock
 from matplotlib.colors import *
-from gym.envs.classic_control import rendering
+#from gym.envs.classic_control import rendering
 import imageio
 
 from gym import spaces
@@ -241,13 +242,15 @@ class World:
     Do not add action pruning, reward structure or any other routine for training in this class. Pls add in upper class MAPFEnv
     """
 
-    def __init__(self, map_generator, num_agents, isDiagonal=False, isConventional=False):
+    def __init__(self, map_generator, starts, goals, all_goals, num_agents, isDiagonal=False, isConventional=False):
         self.num_agents = num_agents
         self.isConventional = isConventional
-        self.manual_world = False
-        self.manual_goal = False
+        self.manual_world = True
+        self.manual_goal = True
         self.goal_generate_distance = 2
-
+        self.starts = starts
+        self.goals = goals
+        self.all_goals = all_goals
         self.map_generator = map_generator
         self.isDiagonal = isDiagonal
 
@@ -472,70 +475,7 @@ class World:
         place all agents and goals in the blank env. If turning on corridor population restriction, only 1 agent is
         allowed to be born in each corridor.
         """
-
-        def corridor_restricted_init_poss(state_map, corridor_map, goal_map, id_list=None):
-            """
-            generate agent init positions when corridor init population is restricted
-            return a dict of positions {agentID:(x,y), ...}
-            """
-            if id_list is None:
-                id_list = list(range(1, self.num_agents + 1))
-
-            free_space1 = list(np.argwhere(state_map == 0))
-            free_space1 = [tuple(pos) for pos in free_space1]
-            corridors_visited = []
-            manual_positions = {}
-            break_completely = False
-            for idx in id_list:
-                if break_completely:
-                    return None
-                pos_set = False
-                agentID = idx
-                while not pos_set:
-                    try:
-                        assert (len(free_space1) > 1)
-                        random_pos = np.random.choice(len(free_space1))
-                    except AssertionError or ValueError:
-                        print('wrong agent')
-                        self.reset_world()
-                        self.init_agents_and_goals()
-                        break_completely = True
-                        if idx == id_list[-1]:
-                            return None
-                        break
-                    position = free_space1[random_pos]
-                    cell_info = corridor_map[position[0], position[1]][1]
-                    if cell_info in [0, 2]:
-                        if goal_map[position[0], position[1]] != agentID:
-                            manual_positions.update({idx: (position[0], position[1])})
-                            free_space1.remove(position)
-                            pos_set = True
-                    elif cell_info == 1:
-                        corridor_id = corridor_map[position[0], position[1]][0]
-                        if corridor_id not in corridors_visited:
-                            if goal_map[position[0], position[1]] != agentID:
-                                manual_positions.update({idx: (position[0], position[1])})
-                                corridors_visited.append(corridor_id)
-                                free_space1.remove(position)
-                                pos_set = True
-                        else:
-                            free_space1.remove(position)
-                    else:
-                        print("Very Weird")
-                        # print('Manual Positions' ,manual_positions)
-            return manual_positions
-
-        # no corridor population restriction
-        if not self.restrict_init_corridor or (self.restrict_init_corridor and self.manual_world):
-            self.put_goals(list(range(1, self.num_agents + 1)), self.goals_init_pos)
-            self._put_agents(list(range(1, self.num_agents + 1)), self.agents_init_pos)
-        # has corridor population restriction
-        else:
-            check = self.put_goals(list(range(1, self.num_agents + 1)), self.goals_init_pos)
-            if check is not None:
-                manual_positions = corridor_restricted_init_poss(self.state, self.corridor_map, self.goals_map)
-                if manual_positions is not None:
-                    self._put_agents(list(range(1, self.num_agents + 1)), manual_positions)
+        self._put_agents(list(range(1, self.num_agents + 1)), self.starts)
 
     def _put_agents(self, id_list, manual_pos=None):
         """
@@ -565,6 +505,7 @@ class World:
                 print(init_poss)
                 raise ValueError('invalid manual_pos for agent' + str(agentID) + ' at: ' + str(init_poss[idx]))
             self.agents[agentID].move(init_poss[idx])
+            self.agents[agentID].goal_pos = tuple(self.goals[agentID])
             self.agents[agentID].distanceMap = getAstarDistanceMap(self.state, self.agents[agentID].position,
                                                                    self.agents[agentID].goal_pos,
                                                                    isCPython=USE_Cython_ASTAR)
@@ -743,10 +684,8 @@ class World:
                         # set agent.goal_pos
                         self.agents[agentID].goal_pos = (new_goals[agentID][0], new_goals[agentID][1])
                         # set agent.next_goal
-                        new_next_goals = random_goal_pos(new_goals, distance=self.goal_generate_distance)
-                        if new_next_goals is None:
-                            return None
-                        self.agents[agentID].next_goal = (new_next_goals[agentID][0], new_next_goals[agentID][1])
+                        self.agents[agentID].next_goal = tuple(self.all_goals[agentID][0])
+                        self.all_goals[agentID] = self.all_goals[agentID][1:]
                         # remove previous goal
                         if previous_goals[agentID] is not None:
                             self.goals_map[previous_goals[agentID][0], previous_goals[agentID][1]] = 0
@@ -756,8 +695,7 @@ class World:
                         # set agent.goal_pos
                         self.agents[agentID].goal_pos = self.agents[agentID].next_goal
                         # set agent.next_goal
-                        self.agents[agentID].next_goal = (
-                            new_goals[agentID][0], new_goals[agentID][1])  # store new goal into next_goal
+                        self.agents[agentID].next_goal = new_goals[agentID]  # store new goal into next_goal
                         # remove previous goal
                         if previous_goals[agentID] is not None:
                             self.goals_map[previous_goals[agentID][0], previous_goals[agentID][1]] = 0
