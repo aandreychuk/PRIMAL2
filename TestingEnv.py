@@ -346,7 +346,7 @@ class ContinuousTestsRunner:
         target_reached, computing_time_list, num_crash, episode_status, succeed_episode, step_count, frames = result
         results['results'] = {'avg_throughput': target_reached/512, 'reached_goals': target_reached}
         results['resolved_vars'] = {'algo': 'ODrM*', 'map_name': instance['map_name'], 'num_agents': num_agents, 'seed': seed}
-        with open(f"results/results_{instance['map_name']}_{instance['num_agents']}_{seed}.json", 'w') as f:
+        with open(f"results/results_{instance['map_name']}_{seed}_{num_agents}.json", 'w') as f:
             json.dump(results, f, indent=1)
             f.close()
 
