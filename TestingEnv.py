@@ -344,18 +344,10 @@ class ContinuousTestsRunner:
         result = self.worker.find_path(max_length=int(max_length), saveImage=False)#np.random.rand() < self.GIF_prob)
 
         target_reached, computing_time_list, num_crash, episode_status, succeed_episode, step_count, frames = result
-        if exists('results.json'):
-            with open('results.json', 'r') as f:
-                all_results = json.load(f)
-                f.close()
-        else:
-            all_results = []
-        results['results'] = {'avg_throughput':target_reached/512, 'reached_goals':target_reached}
+        results['results'] = {'avg_throughput': target_reached/512, 'reached_goals': target_reached}
         results['resolved_vars'] = {'algo': 'ODrM*', 'map_name': instance['map_name'], 'num_agents': num_agents, 'seed': seed}
-        results['id'] = len(all_results)
-        all_results.append(results)
-        with open('results.json', 'w') as f:
-            json.dump(all_results, f, indent=1)
+        with open(f"results/results_{instance['map_name']}_{instance['num_agents']}_{seed}.json", 'w') as f:
+            json.dump(results, f, indent=1)
             f.close()
 
         self.make_gif(frames, instance['map_name'], self.test_method)
