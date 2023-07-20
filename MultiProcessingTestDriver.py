@@ -13,7 +13,7 @@ def run_tests(args):
     num_core = args.num_worker
     parallel_pool = Pool(num_core)
 
-    with open('tasks.json', 'r') as f:
+    with open('instances_den.json', 'r') as f:
         data = json.load(f)
     instances = []
     for n in args.num_agents:
@@ -63,7 +63,7 @@ def run_1_test_wrapper(args, name, seed, num_agents):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_worker", default=4, type=int)
+    parser.add_argument("--num_worker", default=5, type=int)
     parser.add_argument("--printInfo", default=True, type=bool)
     parser.add_argument("-r", "--resume_testing", default=True, help="resume testing")
     parser.add_argument("-g", "--GIF_prob", default=0., help="prob to write GIF")

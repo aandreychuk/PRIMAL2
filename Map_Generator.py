@@ -203,7 +203,6 @@ def manual_generator(str_map, goals_map=None):
 
     def generator():
         return state_map, goals_map
-
     return generator
 
 

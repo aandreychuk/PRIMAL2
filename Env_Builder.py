@@ -19,7 +19,7 @@ try:
 except ImportError:
     USE_Cython_ASTAR = False
     raise ImportError('cpp_aStar not compiled. Please refer to README. Switched to py-astar automatically')
-USE_Cython_ASTAR = False
+#USE_Cython_ASTAR = False
 from GroupLock import Lock
 from matplotlib.colors import *
 #from gym.envs.classic_control import rendering
@@ -365,7 +365,10 @@ class World:
             for position in positions:
                 if position is not None and self.corridor_map[position][0] == t:
                     break
-            index = self.corridors[t]['Positions'].index(position)
+            if position in self.corridors[t]['Positions']:
+                index = self.corridors[t]['Positions'].index(position)
+            else:
+                index = 0
 
             if index == 0:
                 pass
@@ -383,14 +386,15 @@ class World:
                 for position2 in positions2:
                     if position2 is not None and self.corridor_map[position2][0] == t:
                         break
-                index2 = self.corridors[t]['Positions'].index(position2)
-                temp_list = self.corridors[t]['Positions'][0:index2 + 1]
-                temp_list.reverse()
-                temp_end = self.corridors[t]['Positions'][index2 + 1:]
-                self.corridors[t]['Positions'] = []
-                self.corridors[t]['Positions'].extend(temp_list)
-                self.corridors[t]['Positions'].extend(temp_end)
-                self.corridors[t]['Positions'].reverse()
+                if position2 in self.corridors[t]['Positions']:
+                    index2 = self.corridors[t]['Positions'].index(position2)
+                    temp_list = self.corridors[t]['Positions'][0:index2 + 1]
+                    temp_list.reverse()
+                    temp_end = self.corridors[t]['Positions'][index2 + 1:]
+                    self.corridors[t]['Positions'] = []
+                    self.corridors[t]['Positions'].extend(temp_list)
+                    self.corridors[t]['Positions'].extend(temp_end)
+                    self.corridors[t]['Positions'].reverse()
             else:
                 if len(self.corridors[t]['EndPoints']) == 2:
                     print("Weird3")
@@ -506,9 +510,14 @@ class World:
                 raise ValueError('invalid manual_pos for agent' + str(agentID) + ' at: ' + str(init_poss[idx]))
             self.agents[agentID].move(init_poss[idx])
             self.agents[agentID].goal_pos = tuple(self.goals[agentID])
+            self.agents[agentID].next_goal = tuple(self.all_goals[agentID][1])
             self.agents[agentID].distanceMap = getAstarDistanceMap(self.state, self.agents[agentID].position,
                                                                    self.agents[agentID].goal_pos,
                                                                    isCPython=USE_Cython_ASTAR)
+            self.agents[agentID].next_distanceMap = getAstarDistanceMap(self.state,
+                                                                        self.agents[agentID].goal_pos,
+                                                                        self.agents[agentID].next_goal,
+                                                                        isCPython=USE_Cython_ASTAR)
 
     def CheckCollideStatus(self, movement_dict, check_col=True):
         """

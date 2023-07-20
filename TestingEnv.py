@@ -83,7 +83,20 @@ class RL_Planner(MAPFEnv):
     def listValidActions(self, agent_ID, agent_obs):
         return
 
-    def _reset(self, map_generator=None, worldInfo=None):
+    def _reset(self, map_generator=None, starts=None, goals=None, all_goals=None):
+        self.map_generator = map_generator
+        self.world = World(self.map_generator, starts=starts, goals=goals, all_goals=all_goals, num_agents=self.num_agents, isDiagonal=self.IsDiagonal)
+        self.num_agents = self.world.num_agents
+        self.observer.set_env(self.world)
+        self.fresh = True
+        if self.viewer is not None:
+            self.viewer = None
+        self.agent_states = []
+        for _ in range(self.num_agents):
+            rnn_state = self.network.state_init
+            self.agent_states.append(rnn_state)
+
+    '''def _reset(self, map_generator=None, worldInfo=None):
         self.map_generator = map_generator
         if worldInfo is not None:
             self.world = TestWorld(self.map_generator, world_info=worldInfo, isDiagonal=self.IsDiagonal,
@@ -99,7 +112,7 @@ class RL_Planner(MAPFEnv):
         self.agent_states = []
         for i in range(self.num_agents):
             rnn_state = self.network.state_init
-            self.agent_states.append(rnn_state)
+            self.agent_states.append(rnn_state)'''
 
     def step_greedily(self, o):
         def run_network(o):
@@ -315,7 +328,10 @@ class ContinuousTestsRunner:
         self.test_method = self.worker.method
 
         if not os.path.exists(self.result_path):
-            os.mkdir(self.result_path)
+            try:
+                os.mkdir(self.result_path)
+            except Exception as e:
+                print(e)
 
     def read_single_env(self, name):
         root = self.env_path
@@ -345,13 +361,13 @@ class ContinuousTestsRunner:
 
         target_reached, computing_time_list, num_crash, episode_status, succeed_episode, step_count, frames = result
         results['results'] = {'avg_throughput': target_reached/512, 'reached_goals': target_reached}
-        results['resolved_vars'] = {'algo': 'ODrM*', 'map_name': instance['map_name'], 'num_agents': num_agents, 'seed': seed}
+        results['resolved_vars'] = {'algo': 'PRIMAL2', 'map_name': instance['map_name'], 'num_agents': num_agents, 'seed': seed}
         with open(f"results/results_{instance['map_name']}_{seed}_{num_agents}.json", 'w') as f:
             json.dump(results, f, indent=1)
             f.close()
 
         self.make_gif(frames, instance['map_name'], self.test_method)
-        self.write_files(results, instance['map_name'], "_"+str(num_agents))
+        self.write_files(results, instance['map_name'], "_"+str(seed)+"_"+str(num_agents))
         return
 
     def make_gif(self, image, env_name, ext):
@@ -408,7 +424,7 @@ if __name__ == "__main__":
     else:
         raise NameError('invalid planner type')
     # run the tests---------------------------------------------------------
-    with open('tasks.json', 'r') as f:
+    with open('instances_den.json', 'r') as f:
         instances = json.load(f)
     filtered_instances = []
 
